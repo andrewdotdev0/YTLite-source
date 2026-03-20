@@ -1,14 +1,16 @@
 {
   "name": "YTLite Source",
   "identifier": "com.andrewdotdev.ytlite.source",
+  "iconURL": "https://raw.githubusercontent.com/andrewdotdev0/YTLite-source/main/docs/app-icon.png",
+  "tintColor": "#ff3b30",
   "apps": [
     {
       "name": "YouTube",
       "bundleIdentifier": "com.google.ios.youtube",
       "developerName": "dayanch96",
       "localizedDescription": "Automatically updates based on `diarrhea3/YTLiteDiarrhea` releases.",
-      "iconURL": "https://andrewdotdev0.github.io/ytlite-source/docs/icon.png",
-      "tintColor": "#d11f1f",
+      "iconURL": "https://raw.githubusercontent.com/andrewdotdev0/YTLite-source/main/docs/app-icon.png",
+      "tintColor": "#ff3b30",
       "versions": [
         {
           "version": "21.11.4 YouTubePlus v5.2b4",
