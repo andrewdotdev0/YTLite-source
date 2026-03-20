@@ -1,0 +1,100 @@
+name: Update source from YTLiteDiarrhea releases
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"   # cada hora
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch latest release
+        id: release
+        run: |
+          curl -s https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest > latest.json
+          cat latest.json
+
+          TAG_NAME=$(jq -r '.tag_name' latest.json)
+          RELEASE_NAME=$(jq -r '.name // .tag_name' latest.json)
+          PUBLISHED_AT=$(jq -r '.published_at' latest.json)
+
+          IPA_URL=$(jq -r '.assets[] | select(.name | endswith(".ipa")) | .browser_download_url' latest.json | head -n 1)
+          IPA_NAME=$(jq -r '.assets[] | select(.name | endswith(".ipa")) | .name' latest.json | head -n 1)
+          IPA_SIZE=$(jq -r '.assets[] | select(.name | endswith(".ipa")) | .size' latest.json | head -n 1)
+
+          if [ -z "$IPA_URL" ] || [ "$IPA_URL" = "null" ]; then
+            echo "No IPA asset found in latest release"
+            exit 1
+          fi
+
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "published_at=$PUBLISHED_AT" >> $GITHUB_OUTPUT
+          echo "ipa_url=$IPA_URL" >> $GITHUB_OUTPUT
+          echo "ipa_name=$IPA_NAME" >> $GITHUB_OUTPUT
+          echo "ipa_size=$IPA_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Update apps.json
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import os
+
+          path = Path("docs/apps.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+
+          tag = "${{ steps.release.outputs.tag_name }}"
+          release_name = "${{ steps.release.outputs.release_name }}"
+          published_at = "${{ steps.release.outputs.published_at }}"
+          ipa_url = "${{ steps.release.outputs.ipa_url }}"
+          ipa_name = "${{ steps.release.outputs.ipa_name }}"
+          ipa_size = int("${{ steps.release.outputs.ipa_size }}")
+
+          app = data["apps"][0]
+          versions = app.setdefault("versions", [])
+
+          build_version = tag
+          version = release_name
+
+          exists = any(
+              v.get("downloadURL") == ipa_url or v.get("buildVersion") == build_version
+              for v in versions
+          )
+
+          if exists:
+              print("No changes needed; latest release already present.")
+              raise SystemExit(0)
+
+          new_version = {
+              "version": version,
+              "buildVersion": build_version,
+              "date": published_at,
+              "downloadURL": ipa_url,
+              "size": ipa_size
+          }
+
+          versions.insert(0, new_version)
+
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          print("apps.json updated.")
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/apps.json
+          git commit -m "Update source from upstream release" || echo "Nothing to commit"
+          git push
